@@ -1,0 +1,22 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    command: sleep infinity
+
+    privileged: true
+
+    cpus: 2.0
+    mem_limit: 2g
+
+    volumes:
+      - ..:/workspace
+      - ${HOME}/workspaces:/workspaces
+      - mod.cache.go.dev:/go/pkg/mod
+      - bin.cache.go.dev:/home/hypnos/.cache/go-build
+
+volumes:
+  mod.cache.go.dev:
+  bin.cache.go.dev:
