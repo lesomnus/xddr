@@ -70,55 +70,18 @@ func (v HTTP) WithPort(port int) (HTTP, error) {
 
 type HTTPLocal string
 
-func (v HTTPLocal) _localLike()     {}
-func (v HTTPLocal) _reliableLocal() {}
+func (v HTTPLocal) _localLike() {}
 
 func (v HTTPLocal) Sanitize() (HTTPLocal, error) {
-	s := string(v)
-	if s == "" {
-		return "", errors.New("empty HTTP local address")
-	}
-
-	switch s[0] {
-	case ':', '[':
-		w, err := TCPLocal(s).Sanitize()
-		if err != nil {
-			return "", err
-		}
-		return HTTPLocal(w), nil
-	case '.', '/':
-		w, err := UnixLocal(s).Sanitize()
-		if err != nil {
-			return "", err
-		}
-		return HTTPLocal("unix:" + w), nil
-	}
-
-	net, _ := Local(v).Split()
-	switch net {
-	case "", "tcp", "tcp4", "tcp6":
-		w, err := TCPLocal(v).Sanitize()
-		if err != nil {
-			return "", err
-		}
-		return HTTPLocal(w), nil
-	case "unix":
-		w, err := UnixLocal(v).Sanitize()
-		if err != nil {
-			return "", err
-		}
-		return HTTPLocal("unix:" + w), nil
-	}
-
-	return "", errors.New("invalid HTTP local address")
+	return tcpUnixLocal[HTTPLocal](v).Sanitize()
 }
 
 func (v HTTPLocal) WithHost(host string) (HTTPLocal, error) {
-	return reliableWithHost(v, host)
+	return tcpUnixLocal[HTTPLocal](v).WithHost(host)
 }
 
 func (v HTTPLocal) WithPort(port int) (HTTPLocal, error) {
-	return reliableWithPort(v, port)
+	return tcpUnixLocal[HTTPLocal](v).WithPort(port)
 }
 
 func (v HTTPLocal) AsURL() HTTP {

@@ -96,63 +96,18 @@ func (v GRPC) Local() Local {
 
 type GRPCLocal string
 
-func (v GRPCLocal) _localLike()     {}
-func (v GRPCLocal) _reliableLocal() {}
+func (v GRPCLocal) _localLike() {}
 
 func (v GRPCLocal) Sanitize() (GRPCLocal, error) {
-	s := string(v)
-	if s == "" {
-		return "", errors.New("empty gRPC local address")
-	}
-
-	switch s[0] {
-	case ':', '[':
-		w, err := TCPLocal(s).Sanitize()
-		if err != nil {
-			return "", err
-		}
-		return GRPCLocal(w), nil
-
-	case '.', '/':
-		w, err := UnixLocal(s).Sanitize()
-		if err != nil {
-			return "", err
-		}
-		return GRPCLocal("unix:" + w), nil
-	}
-
-	net, _ := Local(v).Split()
-	switch net {
-	case "", "tcp", "tcp4", "tcp6":
-		w, err := TCPLocal(v).Sanitize()
-		if err != nil {
-			return "", err
-		}
-		return GRPCLocal(w), nil
-
-	case "unix":
-		w, err := UnixLocal(v).Sanitize()
-		if err != nil {
-			return "", err
-		}
-		return GRPCLocal(w), nil
-
-	default:
-		// "<host>:<port>"?
-		w, err := TCPLocal(s).Sanitize()
-		if err != nil {
-			return "", err
-		}
-		return GRPCLocal(w), nil
-	}
+	return tcpUnixLocal[GRPCLocal](v).Sanitize()
 }
 
 func (v GRPCLocal) WithHost(host string) (GRPCLocal, error) {
-	return reliableWithHost(v, host)
+	return tcpUnixLocal[GRPCLocal](v).WithHost(host)
 }
 
 func (v GRPCLocal) WithPort(port int) (GRPCLocal, error) {
-	return reliableWithPort(v, port)
+	return tcpUnixLocal[GRPCLocal](v).WithPort(port)
 }
 
 func (v GRPCLocal) AsURL() GRPC {
