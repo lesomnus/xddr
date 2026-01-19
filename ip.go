@@ -56,6 +56,16 @@ func (v IPv4) IsLoopback() bool {
 type IPv6 string
 
 func (v IPv6) Sanitize() (IPv6, error) {
+	if v == "" {
+		return "", fmt.Errorf("empty IPv6 address")
+	}
+	if v[0] == '[' {
+		if v[len(v)-1] != ']' {
+			return "", fmt.Errorf("missing closing ']'")
+		}
+		v = v[1 : len(v)-1]
+	}
+
 	es := strings.SplitN(string(v), ":", 9)
 	if len(es) > 8 {
 		return "", fmt.Errorf("must have at most 8 blocks")

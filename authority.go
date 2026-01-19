@@ -6,6 +6,20 @@ import (
 	"strings"
 )
 
+// Authority represents the authority component of a URL.
+// However, it allows empty host, which is used to represent all interfaces for local use.
+//
+// Syntax:
+//
+//	[<userinfo>@](<host>[:<port>] | :<port>)
+//
+// Examples:
+//
+//	:80
+//	127.0.0.1:80
+//	[::1]:80
+//	localhost:80
+//	user:pass@host:80
 type Authority string
 
 func (Authority) sanitizeUserinfo(s string) (string, error) {
@@ -59,21 +73,21 @@ func (v Authority) Sanitize() (Authority, error) {
 	if hostport == "" {
 		return "", errPosF(pos, "missing host")
 	} else if hostport[0] == '[' {
-		if i := strings.Index(hostport, "]"); i < len("[::]") {
+		if i := strings.Index(hostport, "]"); i+1 < len("[::]") {
 			return "", errPosF(pos, "invalid IPv6 address format")
 		} else if len(hostport) > i+1 && hostport[i+1] == ':' {
 			host = hostport[:i+1]
 			port = hostport[i+1:]
 		}
-	} else if i := strings.LastIndex(hostport, ":"); i == 0 || hostport == "" {
-		return "", errPosF(pos, "missing host")
-	} else if i > 0 {
+	} else if i := strings.LastIndex(hostport, ":"); i >= 0 {
 		host = hostport[:i]
 		port = hostport[i:]
 	}
 
 	// §3.2.2. Host
-	if host[0] == '[' {
+	if host == "" {
+		// port only
+	} else if host[0] == '[' {
 		w, err := IPv6(host[1 : len(host)-1]).Sanitize()
 		if err != nil {
 			return "", errPosF(pos+1+posOf(err), "invalid IPv6 address: %w", err)
@@ -148,8 +162,24 @@ func (v Authority) split() (userinfo, host, port string) {
 	if i := strings.Index(s, "@"); i >= 0 {
 		userinfo, s = s[:i], s[i+1:]
 	}
-	host, port, _ = strings.Cut(s, ":")
+	if s == "" {
+		return
+	}
 
+	if s[0] == '[' {
+		i := strings.Index(s, "]")
+		if i < 0 {
+			return
+		}
+
+		host = s[:i+1]
+		if len(s) > i+1 {
+			port = s[i+2:]
+		}
+		return
+	}
+
+	host, port, _ = strings.Cut(s, ":")
 	return
 }
 
@@ -180,6 +210,16 @@ func (v Authority) Password() string {
 	} else {
 		return ""
 	}
+}
+
+func (v Authority) HostPort() string {
+	s := string(v)
+	before, after, ok := strings.Cut(s, "@")
+	if ok {
+		return after
+	}
+
+	return before
 }
 
 func (v Authority) Host() Host {

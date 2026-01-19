@@ -91,8 +91,17 @@ func TestIPv6(t *testing.T) {
 				AssertNoError(t, err)
 				AssertEq(t, value, tc.want)
 			})
+			t.Run(fmt.Sprintf("IPv6(%q).Sanitize()=%q", "["+tc.given+"]", tc.want), func(t *testing.T) {
+				value, err := xddr.IPv6("[" + tc.given + "]").Sanitize()
+				AssertNoError(t, err)
+				AssertEq(t, value, tc.want)
+			})
 		}
 		for _, tc := range [][]string{
+			{"empty",
+				""},
+			{"missing closing ']'",
+				"[::1"},
 			{"must have at most 8 blocks",
 				"1:2:3:4:5:6:7:8:9",
 			},

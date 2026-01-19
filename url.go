@@ -14,14 +14,15 @@ import (
 //
 // Syntax:
 //
-//	{scheme}:[//][authority][path][?{query}][#{fragment}]
+//	url = <scheme>:[//][<authority>][<path>][?<query>][#<fragment>]
 //
 // Example:
 //
 //	scheme         authority          path          query            fragment
 //	|---|   |----------------------||------| |-----------------| |---------------|
 //	https://user:pass@localhost:1234/foo/bar?key=value&answer=42#anchor-to-section
-//	        |-------| |-------| |--|
+//	        |--------------------------------------------------------------------|
+//	        |-------| |-------| |--|      Opaque
 //	        userinfo     host   port
 type URL string
 
@@ -225,6 +226,16 @@ func (v URL) Authority() Authority {
 	return Authority(w)
 }
 
+func (v URL) Host() Host {
+	a := v.Authority()
+	return a.Host()
+}
+
+func (v URL) Port() int {
+	a := v.Authority()
+	return a.Port()
+}
+
 func (v URL) Path() string {
 	_, _, _, w, _, _ := v.split()
 	return w
@@ -274,6 +285,34 @@ func (v URL) Fragment() string {
 		return ""
 	}
 	return s[i+1:]
+}
+
+func (v URL) Target() string {
+	h := v.Host()
+	switch h {
+	case "0.0.0.0":
+		h = "127.0.0.1"
+	case "[::]":
+		h = "[::1]"
+	}
+
+	w, err := v.WithHost(string(h))
+	if err != nil {
+		return string(v)
+	}
+	return string(w)
+}
+
+func (v URL) Opaque() string {
+	s := string(v)
+	i := strings.Index(s, ":")
+	if i < 0 {
+		return ""
+	}
+
+	s = s[i+1:]
+	s, _ = strings.CutPrefix(s, "//")
+	return s
 }
 
 func (v URL) build(s string, h bool, a Authority, p, q, f string) URL {
@@ -403,4 +442,25 @@ func percent_decode(s string) (b byte, rest string, err error) {
 
 	b = (hi << 4) | lo
 	return
+}
+
+type URLLike interface {
+	~string
+	_urlLike()
+}
+
+func SchemeOf[T URLLike](v T) string {
+	return URL(v).Scheme()
+}
+
+func HostOf[T URLLike](v T) Host {
+	return URL(v).Host()
+}
+
+func WithHost[T URLLike](v T, host string) (T, error) {
+	u, err := URL(v).WithHost(host)
+	if err != nil {
+		return v, err
+	}
+	return T(u), nil
 }

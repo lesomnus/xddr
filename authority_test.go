@@ -18,6 +18,16 @@ func TestAuthority(t *testing.T) {
 			port     int
 		}{
 			{
+				"127.0.0.1",
+				"127.0.0.1",
+				"", "127.0.0.1", -1,
+			},
+			{
+				"[::1]",
+				"[::1]",
+				"", "[::1]", -1,
+			},
+			{
 				"host",
 				"host",
 				"", "host", -1,
@@ -28,9 +38,24 @@ func TestAuthority(t *testing.T) {
 				"", "host", -1,
 			},
 			{
+				":80",
+				":80",
+				"", "", 80,
+			},
+			{
 				"user:pass@host",
 				"user:pass@host",
 				"user:pass", "host", -1,
+			},
+			{
+				"0.0.0.0:80",
+				"0.0.0.0:80",
+				"", "0.0.0.0", 80,
+			},
+			{
+				"[::]:80",
+				"[::]:80",
+				"", "[::]", 80,
 			},
 			{
 				"host:80",
@@ -41,6 +66,11 @@ func TestAuthority(t *testing.T) {
 				"@host:80",
 				"host:80",
 				"", "host", 80,
+			},
+			{
+				"user@:80",
+				"user@:80",
+				"user", "", 80,
 			},
 			{
 				"user:pass@host:80",
@@ -63,8 +93,6 @@ func TestAuthority(t *testing.T) {
 			{"missing host",
 				"",
 				"@",
-				":42",
-				"@:42",
 			},
 			{"invalid IPv6 address format",
 				"[:",

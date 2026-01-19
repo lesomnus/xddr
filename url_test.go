@@ -417,9 +417,7 @@ func TestURL(t *testing.T) {
 				"42:",
 			},
 			{"missing host",
-				"http://:80",
 				"http://@",
-				"http://@:80",
 				"http://@",
 			},
 			{"missing port number",
@@ -603,6 +601,20 @@ func TestURL(t *testing.T) {
 				AssertNoError(t, err)
 				AssertEq(t, value, tc.want)
 			})
+		}
+	})
+}
+
+func TestURLLike(t *testing.T) {
+	t.Run("WithHost", func(t *testing.T) {
+		v := xddr.HTTP("http://example.com/path")
+		w, err := xddr.WithHost(v, "example.org")
+		if err != nil {
+			t.Fatalf("WithHost failed: %v", err)
+		}
+		expected := xddr.HTTP("http://example.org/path")
+		if w != expected {
+			t.Fatalf("WithHost = %v, want %v", w, expected)
 		}
 	})
 }
