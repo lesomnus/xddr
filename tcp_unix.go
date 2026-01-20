@@ -3,9 +3,9 @@ package xddr
 import "errors"
 
 // TCPLocal or UnixLocal
-type tcpUnixLocal[T ~string] string
+type TCPUnixLocal string
 
-func (v tcpUnixLocal[T]) Sanitize() (T, error) {
+func (v TCPUnixLocal) Sanitize() (TCPUnixLocal, error) {
 	s := string(v)
 	if s == "" {
 		return "", errors.New("empty local address")
@@ -17,14 +17,14 @@ func (v tcpUnixLocal[T]) Sanitize() (T, error) {
 		if err != nil {
 			return "", err
 		}
-		return T(w), nil
+		return TCPUnixLocal(w), nil
 
 	case '.', '/':
 		w, err := UnixLocal(s).Sanitize()
 		if err != nil {
 			return "", err
 		}
-		return T("unix:" + w), nil
+		return TCPUnixLocal("unix:" + w), nil
 	}
 
 	net, _ := Local(v).Split()
@@ -34,14 +34,14 @@ func (v tcpUnixLocal[T]) Sanitize() (T, error) {
 		if err != nil {
 			return "", err
 		}
-		return T(w), nil
+		return TCPUnixLocal(w), nil
 
 	case "unix":
 		w, err := UnixLocal(v).Sanitize()
 		if err != nil {
 			return "", err
 		}
-		return T(w), nil
+		return TCPUnixLocal(w), nil
 
 	default:
 		// "<host>:<port>"?
@@ -49,16 +49,16 @@ func (v tcpUnixLocal[T]) Sanitize() (T, error) {
 		if err != nil {
 			return "", err
 		}
-		return T(w), nil
+		return TCPUnixLocal(w), nil
 	}
 }
 
-func (v tcpUnixLocal[T]) WithHost(host string) (T, error) {
+func (v TCPUnixLocal) WithHost(host string) (TCPUnixLocal, error) {
 	if host == "" {
 		return "", errors.New("host is empty")
 	}
 	if host[0] == '.' || host[0] == '/' {
-		return T("unix:" + host), nil
+		return TCPUnixLocal("unix:" + host), nil
 	}
 
 	net, addr := Local(v).Split()
@@ -83,10 +83,10 @@ func (v tcpUnixLocal[T]) WithHost(host string) (T, error) {
 		net = "tcp:"
 	}
 
-	return T(net + string(a)), nil
+	return TCPUnixLocal(net + string(a)), nil
 }
 
-func (v tcpUnixLocal[T]) WithPort(port int) (T, error) {
+func (v TCPUnixLocal) WithPort(port int) (TCPUnixLocal, error) {
 	net, addr := Local(v).Split()
 	switch net {
 	case "tcp", "tcp4", "tcp6":
@@ -99,5 +99,5 @@ func (v tcpUnixLocal[T]) WithPort(port int) (T, error) {
 		return "", err
 	}
 
-	return T(net + ":" + string(a)), nil
+	return TCPUnixLocal(net + ":" + string(a)), nil
 }

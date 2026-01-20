@@ -99,15 +99,15 @@ type GRPCLocal string
 func (v GRPCLocal) _localLike() {}
 
 func (v GRPCLocal) Sanitize() (GRPCLocal, error) {
-	return tcpUnixLocal[GRPCLocal](v).Sanitize()
+	return transWithErr[GRPCLocal](TCPUnixLocal(v).Sanitize())
 }
 
 func (v GRPCLocal) WithHost(host string) (GRPCLocal, error) {
-	return tcpUnixLocal[GRPCLocal](v).WithHost(host)
+	return transWithErr[GRPCLocal](TCPUnixLocal(v).WithHost(host))
 }
 
 func (v GRPCLocal) WithPort(port int) (GRPCLocal, error) {
-	return tcpUnixLocal[GRPCLocal](v).WithPort(port)
+	return transWithErr[GRPCLocal](TCPUnixLocal(v).WithPort(port))
 }
 
 func (v GRPCLocal) AsURL() GRPC {

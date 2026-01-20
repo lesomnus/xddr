@@ -1,10 +1,7 @@
 package xddr
 
 import (
-	"errors"
-	"fmt"
 	"net"
-	"strconv"
 	"strings"
 )
 
@@ -52,70 +49,32 @@ func AddressOf[T LocalLike](v T) string {
 	return Local(v).Address()
 }
 
+func isStream(net string) bool {
+	switch net {
+	case "tcp", "tcp4", "tcp6", "unix", "unixpacket":
+		return true
+	default:
+		return false
+	}
+}
+
+func isDgram(net string) bool {
+	switch net {
+	case "udp", "udp4", "udp6", "unixgram":
+		return true
+	default:
+		return false
+	}
+}
+
 func Listen[T LocalLike](v T) (net.Listener, error) {
 	n, a := Local(v).Split()
 	return net.Listen(n, a)
 }
 
-type TCPLocal string
-
-func (v TCPLocal) _localLike() {}
-
-func (v TCPLocal) Sanitize() (TCPLocal, error) {
-	s := string(v)
-	if s == "" {
-		return "", errors.New("empty TCP local address")
-	}
-
-	net, addr := Local(s).Split()
-	if net == "" {
-		// ":<port>"?
-		if _, err := strconv.Atoi(addr); err != nil {
-			return "", errors.New("invalid TCP local address")
-		}
-		return TCPLocal("tcp::" + addr), nil
-	}
-
-	switch net {
-	case "tcp", "tcp4", "tcp6":
-	default:
-		// "<host>:<port>"?
-		net = "tcp"
-		addr = s
-	}
-
-	a, err := Authority(addr).Sanitize()
-	if err != nil {
-		return "", err
-	}
-
-	h := a.Host()
-	switch {
-	case h == "":
-		switch net {
-		case "tcp4":
-			h = "0.0.0.0"
-		case "tcp6":
-			h = "[::]"
-		}
-
-	case h.IsIPv4():
-		if net == "tcp6" {
-			return "", errors.New("invalid TCP local address: IPv4 address with tcp6 network")
-		}
-		net = "tcp4"
-
-	case h.IsIPv6():
-		if net == "tcp4" {
-			return "", errors.New("invalid TCP local address: IPv6 address with tcp4 network")
-		}
-		net = "tcp6"
-
-	default:
-		// unreachable?
-		return "", errors.New("invalid TCP local address: host is not an IP address")
-	}
-	return TCPLocal(fmt.Sprintf("%s:%s:%d", net, h, a.Port())), nil
+func ListenPacket[T LocalLike](v T) (net.PacketConn, error) {
+	n, a := Local(v).Split()
+	return net.ListenPacket(n, a)
 }
 
 type UnixLocal string

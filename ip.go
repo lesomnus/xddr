@@ -1,6 +1,7 @@
 package xddr
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -216,4 +217,68 @@ func (v IPv6) Bytes() [16]byte {
 
 func (v IPv6) IsLoopback() bool {
 	return v.Bytes() == [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
+}
+
+type ipBaseLocal struct {
+	// net must be either "tcp" or "udp"
+	net string
+}
+
+func (x ipBaseLocal) Sanitize(v string) (string, error) {
+	if v == "" {
+		return "", errors.New("empty local address")
+	}
+
+	netX := x.net
+	net4 := x.net + "4"
+	net6 := x.net + "6"
+
+	net, addr := Local(v).Split()
+	if net == "" {
+		// ":<port>"?
+		if _, err := strconv.Atoi(addr); err != nil {
+			return "", errors.New("invalid local address")
+		}
+		return netX + "::" + addr, nil
+	}
+
+	switch net {
+	case netX, net4, net6:
+	default:
+		// "<host>:<port>"?
+		net = netX
+		addr = v
+	}
+
+	a, err := Authority(addr).Sanitize()
+	if err != nil {
+		return "", err
+	}
+
+	h := a.Host()
+	switch {
+	case h == "":
+		switch net {
+		case net4:
+			h = "0.0.0.0"
+		case net6:
+			h = "[::]"
+		}
+
+	case h.IsIPv4():
+		if net == net6 {
+			return "", errors.New("invalid local address: IPv4 address with IPv6 network")
+		}
+		net = net4
+
+	case h.IsIPv6():
+		if net == net4 {
+			return "", errors.New("invalid local address: IPv6 address with IPv4 network")
+		}
+		net = net6
+	default:
+		// unreachable?
+		return "", errors.New("invalid local address: host is not an IP address")
+	}
+	return net + ":" + string(h) + ":" + strconv.Itoa(a.Port()), nil
 }

@@ -49,3 +49,12 @@ func accPosErr(err error, offset int) error {
 	}
 	return err
 }
+
+func transWithErr[T ~string, U ~string](v U, err error) (T, error) {
+	var z T
+	if err != nil {
+		return z, err
+	}
+
+	return T(v), nil
+}

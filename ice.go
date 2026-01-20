@@ -6,6 +6,13 @@ import (
 
 // ICE represents an ICE (Interactive Connectivity Establishment) URI.
 // See RFC 7064 and 7065.
+//
+// Examples:
+//
+//	stun:example.com
+//	stuns:example.com:5349
+//	turn:example.com?transport=udp
+//	turns:example.com:443?transport=tcp
 type ICE string
 
 func (v ICE) Sanitize() (ICE, error) {
@@ -91,4 +98,20 @@ func (v ICE) WithPort(port int) (ICE, error) {
 		return "", err
 	}
 	return ICE(u), nil
+}
+
+type ICELocal string
+
+func (ICELocal) _localLike() {}
+
+func (v ICELocal) Sanitize() (ICELocal, error) {
+	return transWithErr[ICELocal](TCPUDPLocal(v).Sanitize())
+}
+
+func (v ICELocal) IsStream() bool {
+	return isStream(NetworkOf(v))
+}
+
+func (v ICELocal) IsDgram() bool {
+	return isDgram(NetworkOf(v))
 }

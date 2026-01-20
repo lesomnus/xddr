@@ -73,15 +73,15 @@ type HTTPLocal string
 func (v HTTPLocal) _localLike() {}
 
 func (v HTTPLocal) Sanitize() (HTTPLocal, error) {
-	return tcpUnixLocal[HTTPLocal](v).Sanitize()
+	return transWithErr[HTTPLocal](TCPUnixLocal(v).Sanitize())
 }
 
 func (v HTTPLocal) WithHost(host string) (HTTPLocal, error) {
-	return tcpUnixLocal[HTTPLocal](v).WithHost(host)
+	return transWithErr[HTTPLocal](TCPUnixLocal(v).WithHost(host))
 }
 
 func (v HTTPLocal) WithPort(port int) (HTTPLocal, error) {
-	return tcpUnixLocal[HTTPLocal](v).WithPort(port)
+	return transWithErr[HTTPLocal](TCPUnixLocal(v).WithPort(port))
 }
 
 func (v HTTPLocal) AsURL() HTTP {
