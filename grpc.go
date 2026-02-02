@@ -32,7 +32,7 @@ func (v GRPC) Sanitize() (GRPC, error) {
 		// There is scheme.
 	} else if i := strings.Index(s, ":"); i < 0 {
 		// No scheme, add default.
-		s = "dns://" + s
+		s = "dns:///" + s
 	} else {
 		j := strings.IndexAny(s[i:], "/?#")
 		maybe_port := ""
@@ -46,7 +46,7 @@ func (v GRPC) Sanitize() (GRPC, error) {
 			// Not a port, it is assumed that there is a scheme and URL is opaque.
 		} else {
 			// It is a port, add default scheme.
-			s = "dns://" + s
+			s = "dns:///" + s
 		}
 	}
 

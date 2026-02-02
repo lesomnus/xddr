@@ -13,8 +13,9 @@ func TestGRPC(t *testing.T) {
 			given      xddr.GRPC
 			normalized xddr.GRPC
 		}{
-			{"grpc.io:50051", "dns://grpc.io:50051"},
+			{"grpc.io:50051", "dns:///grpc.io:50051"},
 			{"dns://grpc.io:50051", "dns://grpc.io:50051"},
+			{"dns:///grpc.io:50051", "dns:///grpc.io:50051"},
 			{"unix:///var/run/grpc.sock", "unix:///var/run/grpc.sock"},
 			{"unix:/var/run/grpc.sock", "unix:///var/run/grpc.sock"},
 			{"ipv4:198.51.100.123:50051", "ipv4:198.51.100.123:50051"},
