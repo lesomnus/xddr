@@ -28,9 +28,6 @@ func (v GRPC) Sanitize() (GRPC, error) {
 	if s == "" {
 		return "", errors.New("empty gRPC address")
 	}
-	if s[0] == ':' {
-
-	}
 	if i := strings.Index(s, "://"); i >= 0 {
 		// There is scheme.
 	} else if i := strings.Index(s, ":"); i < 0 {

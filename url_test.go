@@ -393,6 +393,34 @@ func TestURL(t *testing.T) {
 				"scheme://[::1]:80/?#",
 				"scheme://[::1]:80/?#",
 				"scheme", "[::1]:80", "/", "", ""},
+
+			// Filepath-like.
+			// Use [Filepath] to parse filepath to get convenient results.
+			// This test is just to show how [URL] handles such inputs.
+			{
+				"file:./relative/path",
+				"file:./relative/path",
+				"file", ".", "/relative/path", "", ""},
+			{
+				"file:./../relative/path",
+				"file:./../relative/path",
+				"file", ".", "/../relative/path", "", ""},
+			{
+				"file:/absolute/path",
+				"file:/absolute/path",
+				"file", "", "/absolute/path", "", ""},
+			{
+				"file://./relative/path",
+				"file://./relative/path",
+				"file", ".", "/relative/path", "", ""},
+			{
+				"file://./../relative/path",
+				"file://./../relative/path",
+				"file", ".", "/../relative/path", "", ""},
+			{
+				"file:///./absolute/path",
+				"file:///./absolute/path",
+				"file", "", "/./absolute/path", "", ""},
 		} {
 			t.Run(string(tc.given), func(t *testing.T) {
 				v, err := tc.given.Sanitize()

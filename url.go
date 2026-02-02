@@ -208,7 +208,6 @@ func (v URL) split() (scheme string, h bool, authority Authority, path, query, f
 		fragment = s[i+1:]
 	}
 
-	// Invalid URL.
 	return
 }
 
