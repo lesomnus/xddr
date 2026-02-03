@@ -69,6 +69,106 @@ func TestFilepath(t *testing.T) {
 				"file://../relative/path.txt",
 				"file://../relative/path.txt",
 				"file", "../relative/path.txt", "", ""},
+
+			// Query.
+			{
+				"file:/a?query",
+				"file:/a?query",
+				"file", "/a", "query", ""},
+			{
+				"file:/a?query#",
+				"file:/a?query",
+				"file", "/a", "query", ""},
+			{
+				"file:./r?query",
+				"file:./r?query",
+				"file", "./r", "query", ""},
+			{
+				"file:./r?query#",
+				"file:./r?query",
+				"file", "./r", "query", ""},
+			{
+				"file:../r?query",
+				"file:../r?query",
+				"file", "../r", "query", ""},
+			{
+				"file:///a?query",
+				"file:///a?query",
+				"file", "/a", "query", ""},
+			{
+				"file:../r?query",
+				"file:../r?query",
+				"file", "../r", "query", ""},
+			{
+				"file:///a?query#",
+				"file:///a?query",
+				"file", "/a", "query", ""},
+			{
+				"file://./r?query",
+				"file://./r?query",
+				"file", "./r", "query", ""},
+			{
+				"file://./r?query#",
+				"file://./r?query",
+				"file", "./r", "query", ""},
+			{
+				"file://../r?query",
+				"file://../r?query",
+				"file", "../r", "query", ""},
+			{
+				"file://../r?query#",
+				"file://../r?query",
+				"file", "../r", "query", ""},
+
+			// Fragment.
+			{
+				"file:/a#fragment",
+				"file:/a#fragment",
+				"file", "/a", "", "fragment"},
+			{
+				"file:/a?#fragment",
+				"file:/a#fragment",
+				"file", "/a", "", "fragment"},
+			{
+				"file:./r#fragment",
+				"file:./r#fragment",
+				"file", "./r", "", "fragment"},
+			{
+				"file:./r?#fragment",
+				"file:./r#fragment",
+				"file", "./r", "", "fragment"},
+			{
+				"file:../r#fragment",
+				"file:../r#fragment",
+				"file", "../r", "", "fragment"},
+			{
+				"file:../r?#fragment",
+				"file:../r#fragment",
+				"file", "../r", "", "fragment"},
+			{
+				"file:../r#fragment",
+				"file:../r#fragment",
+				"file", "../r", "", "fragment"},
+			{
+				"file:../r?#fragment",
+				"file:../r#fragment",
+				"file", "../r", "", "fragment"},
+			{
+				"file://./r#fragment",
+				"file://./r#fragment",
+				"file", "./r", "", "fragment"},
+			{
+				"file://./r?#fragment",
+				"file://./r#fragment",
+				"file", "./r", "", "fragment"},
+			{
+				"file://../r#fragment",
+				"file://../r#fragment",
+				"file", "../r", "", "fragment"},
+			{
+				"file://../r?#fragment",
+				"file://../r#fragment",
+				"file", "../r", "", "fragment"},
 		} {
 			t.Run(string(tc.given), func(t *testing.T) {
 				v, err := tc.given.Sanitize()

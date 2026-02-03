@@ -41,6 +41,10 @@ func (v Filepath) Sanitize() (Filepath, error) {
 		return "", err
 	}
 
+	// u.Path() would be:
+	//	- `/z/a`
+	//	- `/z/./`
+	//	- `/z/./../`
 	p := u.Path()[1:]
 	if starts_with_parent {
 		p = strings.TrimPrefix(p, "./")
@@ -49,12 +53,7 @@ func (v Filepath) Sanitize() (Filepath, error) {
 		p = "/"
 	}
 
-	r := scheme + ":"
-	if has_authority {
-		r += "//"
-	}
-	r += p
-	return Filepath(r), nil
+	return v.build(scheme, has_authority, p, u.Query(), u.Fragment()), nil
 }
 
 func (v Filepath) split() (scheme string, h bool, path, query, fragment string) {
@@ -62,7 +61,7 @@ func (v Filepath) split() (scheme string, h bool, path, query, fragment string) 
 
 	scheme, s, _ = strings.Cut(s, ":")
 	s, h = strings.CutPrefix(s, "//")
-	if i := strings.IndexAny(path, "?#"); i < 0 {
+	if i := strings.IndexAny(s, "?#"); i < 0 {
 		path = s
 		return
 	} else {
@@ -97,7 +96,7 @@ func (v Filepath) Path() string {
 }
 
 func (v Filepath) Query() string {
-	_, _, _, _, w := v.split()
+	_, _, _, w, _ := v.split()
 	return w
 }
 
