@@ -7,6 +7,215 @@ import (
 	"strings"
 )
 
+// IP represents union of IPv4 and IPv6 addresses.
+//
+// Examples:
+//
+//	(empty string) - unspecified IP address
+//	0.0.0.0
+//	127.0.0.1
+//	::
+//	::1
+//	::ffff:192.168.0.1
+//	2001:0db8:85a3::8a2e:370:7334
+type IP string
+
+func (v IP) Sanitize() (IP, error) {
+	s := string(v)
+	switch {
+	case s == "":
+		// Unspecified IP
+		return "", nil
+	case strings.Contains(s, "."):
+		return transWithErr[IP](IPv4(s).Sanitize())
+	case strings.Contains(s, ":"):
+		return transWithErr[IP](IPv6(s).Sanitize())
+	default:
+		return "", errors.New("invalid IP address")
+	}
+}
+
+func (v IP) V4() (IPv4, bool) {
+	if v == "" {
+		return "0.0.0.0", true
+	}
+	if strings.Contains(string(v), ".") {
+		return IPv4(v), true
+	}
+	return "", false
+}
+
+func (v IP) V6() (IPv6, bool) {
+	if v == "" {
+		return "::", true
+	}
+	if strings.Contains(string(v), ":") {
+		return IPv6(v), true
+	}
+	return "", false
+}
+
+func (v IP) Bytes() []byte {
+	if ipv4, ok := v.V4(); ok {
+		b4 := ipv4.Bytes()
+		return b4[:]
+	}
+	if ipv6, ok := v.V6(); ok {
+		b6 := ipv6.Bytes()
+		return b6[:]
+	}
+	return nil
+}
+
+func (v IP) IsUnspecified() bool {
+	if ipv4, ok := v.V4(); ok {
+		return ipv4.IsUnspecified()
+	}
+	if ipv6, ok := v.V6(); ok {
+		return ipv6.IsUnspecified()
+	}
+	return false
+}
+
+func (v IP) IsLoopback() bool {
+	if ipv4, ok := v.V4(); ok {
+		return ipv4.IsLoopback()
+	}
+	if ipv6, ok := v.V6(); ok {
+		return ipv6.IsLoopback()
+	}
+	return false
+}
+
+func (v IP) IsPrivate() bool {
+	if ipv4, ok := v.V4(); ok {
+		return ipv4.IsPrivate()
+	}
+	if ipv6, ok := v.V6(); ok {
+		return ipv6.IsPrivate()
+	}
+	return false
+}
+
+type IPPort string
+
+func (v IPPort) Sanitize() (IPPort, error) {
+	s := string(v)
+	i := strings.LastIndex(s, ":")
+	if i < 0 {
+		return "", errors.New("missing ':' separator for port")
+	}
+	if j := strings.Index(s, "]"); j >= 0 && i < j {
+		// IPv6 without port
+		return "", errors.New("missing ':' separator for port")
+	}
+
+	ip := IP(s[:i])
+	port := s[i+1:]
+
+	if ip_, err := ip.Sanitize(); err != nil {
+		return "", err
+	} else {
+		ip = ip_
+	}
+
+	n, err := strconv.Atoi(port)
+	if err != nil {
+		return "", fmt.Errorf("invalid port number: %w", err)
+	} else if !(0 <= n && n <= 65535) {
+		return "", errors.New("port number must be between 0 and 65535")
+	}
+
+	return IPPort(string(ip) + ":" + strconv.Itoa(n)), nil
+}
+
+func (v IPPort) Split() (IP, int) {
+	s := string(v)
+	i := strings.LastIndex(s, ":")
+
+	n, _ := strconv.Atoi(s[i+1:])
+
+	return IP(s[:i]), n
+}
+
+func (v IPPort) IP() IP {
+	ip, _ := v.Split()
+	return ip
+}
+
+func (v IPPort) Port() int {
+	_, port := v.Split()
+	return port
+}
+
+type IPwithCIDR string
+
+func (v IPwithCIDR) Sanitize() (IPwithCIDR, error) {
+	s := string(v)
+	i := strings.LastIndex(s, "/")
+	if i < 0 {
+		return "", errors.New("missing '/' separator for CIDR")
+	}
+	if i == 0 {
+		return "", errors.New("missing IP address before '/'")
+	}
+
+	ip := IP(s[:i])
+	ns := s[i+1:]
+
+	n, err := strconv.Atoi(ns)
+	if err != nil {
+		return "", errors.New("invalid network size")
+	}
+
+	switch {
+	case strings.Contains(s, "."):
+		ipv4, err := IPv4(ip).Sanitize()
+		if err != nil {
+			return "", err
+		}
+		if !(0 <= n && n <= 32) {
+			return "", errors.New("network size must be between 0 and 32 for IPv4")
+		}
+		return IPwithCIDR(string(ipv4) + "/" + strconv.Itoa(n)), nil
+
+	case strings.Contains(s, ":"):
+		ipv6, err := IPv6(ip).Sanitize()
+		if err != nil {
+			return "", err
+		}
+		if !(0 <= n && n <= 128) {
+			return "", errors.New("network size must be between 0 and 128 for IPv6")
+		}
+		return IPwithCIDR(string(ipv6) + "/" + strconv.Itoa(n)), nil
+
+	default:
+		return "", errors.New("invalid IP address")
+	}
+}
+
+func (v IPwithCIDR) Split() (IP, int) {
+	s := string(v)
+	i := strings.LastIndex(s, "/")
+
+	n, _ := strconv.Atoi(s[i+1:])
+
+	return IP(s[:i]), n
+}
+
+func (v IPwithCIDR) IP() IP {
+	ip, _ := v.Split()
+	return ip
+}
+
+func (v IPwithCIDR) Bytes() []byte {
+	return v.IP().Bytes()
+}
+
+func (v IPwithCIDR) IsPrivate() bool {
+	return v.IP().IsPrivate()
+}
+
 type IPv4 string
 
 func (v IPv4) Sanitize() (IPv4, error) {
@@ -49,9 +258,30 @@ func (v IPv4) Bytes() [4]byte {
 	return b
 }
 
+func (v IPv4) IsUnspecified() bool {
+	return v == "0.0.0.0"
+}
+
 func (v IPv4) IsLoopback() bool {
 	// 127.0.0.0/8
 	return strings.HasPrefix(string(v), "127.")
+}
+
+func (v IPv4) IsPrivate() bool {
+	b := v.Bytes()
+	switch {
+	case b[0] == 10:
+		// 10.0.0.0/8
+		return true
+	case b[0] == 172 && b[1] >= 16 && b[1] <= 31:
+		// 172.16.0.0/12
+		return true
+	case b[0] == 192 && b[1] == 168:
+		// 192.168.0.0/16
+		return true
+	default:
+		return false
+	}
 }
 
 type IPv6 string
@@ -217,6 +447,21 @@ func (v IPv6) Bytes() [16]byte {
 
 func (v IPv6) IsLoopback() bool {
 	return v.Bytes() == [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
+}
+
+func (v IPv6) IsPrivate() bool {
+	b := v.Bytes()
+	switch {
+	case b[0]|0b11111110 == 0xfc:
+		// fc00::/7
+		return true
+	default:
+		return false
+	}
+}
+
+func (v IPv6) IsUnspecified() bool {
+	return v == "::"
 }
 
 type ipBaseLocal struct {

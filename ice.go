@@ -108,6 +108,14 @@ func (v ICELocal) Sanitize() (ICELocal, error) {
 	return transWithErr[ICELocal](TCPUDPLocal(v).Sanitize())
 }
 
+func (v ICELocal) Network() string {
+	return Local(v).Network()
+}
+
+func (v ICELocal) Address() IPPort {
+	return IPPort(Local(v).Address())
+}
+
 func (v ICELocal) IsStream() bool {
 	return isStream(NetworkOf(v))
 }
