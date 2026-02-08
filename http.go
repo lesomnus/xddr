@@ -102,7 +102,7 @@ func (v HTTPLocal) AsURL() HTTP {
 		case "[::]":
 			host = "[::1]"
 		}
-		return HTTP("http:///" + host + ":" + port)
+		return HTTP("http://" + host + ":" + port)
 
 	case "unix":
 		return HTTP("unix://" + addr)
