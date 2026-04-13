@@ -58,3 +58,10 @@ func transWithErr[T ~string, U ~string](v U, err error) (T, error) {
 
 	return T(v), nil
 }
+
+func must[T any](v T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return v
+}

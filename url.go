@@ -394,9 +394,17 @@ func (v URL) WithPort(port int) (URL, error) {
 	return v.build(s, h, a, p, q, f), nil
 }
 
+func (v URL) WithPortX(port int) URL {
+	return must(v.WithPort(port))
+}
+
 func (v URL) WithPath(path string) (URL, error) {
 	s, h, a, _, q, f := v.split()
 	return v.build(s, h, a, path, q, f), nil
+}
+
+func (v URL) WithPathX(path string) URL {
+	return must(v.WithPath(path))
 }
 
 func (v URL) WithQuery(query string) (URL, error) {
@@ -404,9 +412,17 @@ func (v URL) WithQuery(query string) (URL, error) {
 	return v.build(s, h, a, p, query, f), nil
 }
 
+func (v URL) WithQueryX(query string) URL {
+	return must(v.WithQuery(query))
+}
+
 func (v URL) WithFragment(fragment string) (URL, error) {
 	s, h, a, p, q, _ := v.split()
 	return v.build(s, h, a, p, q, fragment), nil
+}
+
+func (v URL) WithFragmentX(fragment string) URL {
+	return must(v.WithFragment(fragment))
 }
 
 func isUrlUnreserved(c byte) bool {

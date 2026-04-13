@@ -156,6 +156,56 @@ func TestURL(t *testing.T) {
 				"scheme:///path/foo",
 				"scheme", "", "/path/foo", "", ""},
 
+			// Number of slashes matters.
+			{
+				"dns:/path/foo:443",
+				"dns:/path/foo:443",
+				"dns", "", "/path/foo:443", "", ""},
+			{
+				"dns:/path/foo:443?",
+				"dns:/path/foo:443",
+				"dns", "", "/path/foo:443", "", ""},
+			{
+				"dns:/path/foo:443#",
+				"dns:/path/foo:443",
+				"dns", "", "/path/foo:443", "", ""},
+			{
+				"dns:/path/foo:443?#",
+				"dns:/path/foo:443",
+				"dns", "", "/path/foo:443", "", ""},
+			{
+				"dns://path/foo:443",
+				"dns://path/foo:443",
+				"dns", "path", "/foo:443", "", ""},
+			{
+				"dns://path/foo:443?",
+				"dns://path/foo:443",
+				"dns", "path", "/foo:443", "", ""},
+			{
+				"dns://path/foo:443#",
+				"dns://path/foo:443",
+				"dns", "path", "/foo:443", "", ""},
+			{
+				"dns://path/foo:443?#",
+				"dns://path/foo:443",
+				"dns", "path", "/foo:443", "", ""},
+			{
+				"dns:///path/foo:443",
+				"dns:///path/foo:443",
+				"dns", "", "/path/foo:443", "", ""},
+			{
+				"dns:///path/foo:443?",
+				"dns:///path/foo:443",
+				"dns", "", "/path/foo:443", "", ""},
+			{
+				"dns:///path/foo:443#",
+				"dns:///path/foo:443",
+				"dns", "", "/path/foo:443", "", ""},
+			{
+				"dns:///path/foo:443?#",
+				"dns:///path/foo:443",
+				"dns", "", "/path/foo:443", "", ""},
+
 			// Query.
 			{
 				"scheme:?query",
