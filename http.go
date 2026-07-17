@@ -1,6 +1,9 @@
 package xddr
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
 type HTTP string
 
@@ -12,7 +15,7 @@ func (v HTTP) Sanitize() (HTTP, error) {
 		return "", err
 	}
 
-	s, _, a, p, f, q := u.split()
+	s, _, a, p, q, f := u.split()
 	if s != "http" && s != "https" {
 		return "", errors.New("scheme is not http or https")
 	}
@@ -39,6 +42,20 @@ func (v HTTP) mapPort(scheme string, port int) int {
 	return port
 }
 
+func (v HTTP) Scheme() string {
+	return URL(v).Scheme()
+}
+
+func (v HTTP) Authority() Authority {
+	return URL(v).Authority()
+}
+
+func (v HTTP) Host() Host {
+	return URL(v).Host()
+}
+
+// Port returns the port of the URL.
+// If the port is not present, default port of the scheme is returned.
 func (v HTTP) Port() int {
 	port := URL(v).Authority().Port()
 	if port > 0 {
@@ -57,6 +74,14 @@ func (v HTTP) Port() int {
 	return -1
 }
 
+func (v HTTP) WithHost(host string) (HTTP, error) {
+	return transWithErr[HTTP](URL(v).WithHost(host))
+}
+
+func (v HTTP) WithHostX(host string) HTTP {
+	return must(v.WithHost(host))
+}
+
 func (v HTTP) WithPort(port int) (HTTP, error) {
 	s := URL(v).Scheme()
 	port = v.mapPort(s, port)
@@ -66,6 +91,10 @@ func (v HTTP) WithPort(port int) (HTTP, error) {
 		return "", err
 	}
 	return HTTP(u), nil
+}
+
+func (v HTTP) WithPortX(port int) HTTP {
+	return must(v.WithPort(port))
 }
 
 type HTTPLocal string
@@ -80,8 +109,16 @@ func (v HTTPLocal) WithHost(host string) (HTTPLocal, error) {
 	return transWithErr[HTTPLocal](TCPUnixLocal(v).WithHost(host))
 }
 
+func (v HTTPLocal) WithHostX(host string) HTTPLocal {
+	return must(v.WithHost(host))
+}
+
 func (v HTTPLocal) WithPort(port int) (HTTPLocal, error) {
 	return transWithErr[HTTPLocal](TCPUnixLocal(v).WithPort(port))
+}
+
+func (v HTTPLocal) WithPortX(port int) HTTPLocal {
+	return must(v.WithPort(port))
 }
 
 func (v HTTPLocal) AsURL() HTTP {
@@ -95,7 +132,7 @@ func (v HTTPLocal) AsURL() HTTP {
 			case "tcp", "tcp4":
 				host = "127.0.0.1"
 			case "tcp6":
-				host = "::1"
+				host = "[::1]"
 			}
 		case "0.0.0.0":
 			host = "127.0.0.1"
@@ -105,7 +142,11 @@ func (v HTTPLocal) AsURL() HTTP {
 		return HTTP("http://" + host + ":" + port)
 
 	case "unix":
-		return HTTP("unix://" + addr)
+		if strings.HasPrefix(addr, "/") {
+			return HTTP("unix://" + addr)
+		}
+		// Relative path.
+		return HTTP("unix:" + addr)
 	}
 
 	return HTTP("http://" + addr)

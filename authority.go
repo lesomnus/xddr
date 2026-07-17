@@ -1,6 +1,7 @@
 package xddr
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -114,14 +115,9 @@ func (v Authority) Sanitize() (Authority, error) {
 		port = port[1:]
 		pos++
 
-		p := port
-		for i := 0; i < len(p); i++ {
-			c := p[i]
-			if c != '0' {
-				break
-			}
-
-			port = p[i+1:]
+		// Strip leading zeros but keep the last digit so ":0" stays ":0".
+		for len(port) > 1 && port[0] == '0' {
+			port = port[1:]
 			pos++
 		}
 		for i := 0; i < len(port); i++ {
@@ -129,6 +125,9 @@ func (v Authority) Sanitize() (Authority, error) {
 			if !isDigit(c) {
 				return "", errPosF(pos+i, "invalid character %q in port", c)
 			}
+		}
+		if n, err := strconv.Atoi(port); err != nil || n > 65535 {
+			return "", errPosF(pos, "port number out of range")
 		}
 
 		// pos += len(port)
@@ -264,6 +263,10 @@ func (v Authority) WithUserinfo(userinfo string) (Authority, error) {
 	return v.build(w, h, p), nil
 }
 
+func (v Authority) WithUserinfoX(userinfo string) Authority {
+	return must(v.WithUserinfo(userinfo))
+}
+
 func (v Authority) WithHost(host string) (Authority, error) {
 	w, err := Host(host).Sanitize()
 	if err != nil {
@@ -274,7 +277,17 @@ func (v Authority) WithHost(host string) (Authority, error) {
 	return v.build(u, string(w), p), nil
 }
 
+func (v Authority) WithHostX(host string) Authority {
+	return must(v.WithHost(host))
+}
+
+// WithPort returns the Authority with the given port.
+// If the port is negative, the port is removed.
 func (v Authority) WithPort(port int) (Authority, error) {
+	if port > 65535 {
+		return "", errors.New("port number out of range")
+	}
+
 	u, h, p := v.split()
 	if port < 0 {
 		p = ""
@@ -283,4 +296,8 @@ func (v Authority) WithPort(port int) (Authority, error) {
 	}
 
 	return v.build(u, h, p), nil
+}
+
+func (v Authority) WithPortX(port int) Authority {
+	return must(v.WithPort(port))
 }

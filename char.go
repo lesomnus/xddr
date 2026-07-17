@@ -68,7 +68,10 @@ func sanitizeCharTo(r *strings.Builder, s string, test func(byte) bool) (int, er
 		if err != nil {
 			return 0, err
 		}
-		if test(b) {
+		if isUrlUnreserved(b) {
+			// Only unreserved characters are decoded; decoding reserved
+			// characters such as sub-delims could change the structure of
+			// the value (RFC 3986 §2.2).
 			r.WriteByte(b)
 		} else {
 			r.WriteByte('%')

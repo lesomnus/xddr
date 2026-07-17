@@ -138,3 +138,25 @@ func (v Filepath) WithPath(path string) (Filepath, error) {
 	s, h, _, q, f := v.split()
 	return v.build(s, h, path, q, f), nil
 }
+
+func (v Filepath) WithPathX(path string) Filepath {
+	return must(v.WithPath(path))
+}
+
+func (v Filepath) WithQuery(query string) (Filepath, error) {
+	s, h, p, _, f := v.split()
+	return v.build(s, h, p, query, f), nil
+}
+
+func (v Filepath) WithQueryX(query string) Filepath {
+	return must(v.WithQuery(query))
+}
+
+func (v Filepath) WithFragment(fragment string) (Filepath, error) {
+	s, h, p, q, _ := v.split()
+	return v.build(s, h, p, q, fragment), nil
+}
+
+func (v Filepath) WithFragmentX(fragment string) Filepath {
+	return must(v.WithFragment(fragment))
+}

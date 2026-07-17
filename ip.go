@@ -26,10 +26,12 @@ func (v IP) Sanitize() (IP, error) {
 	case s == "":
 		// Unspecified IP
 		return "", nil
+	case strings.Contains(s, ":"):
+		// Note that ":" is tested first since an IPv4-mapped IPv6 address
+		// such as "::ffff:192.0.2.128" contains "." as well.
+		return transWithErr[IP](IPv6(s).Sanitize())
 	case strings.Contains(s, "."):
 		return transWithErr[IP](IPv4(s).Sanitize())
-	case strings.Contains(s, ":"):
-		return transWithErr[IP](IPv6(s).Sanitize())
 	default:
 		return "", errors.New("invalid IP address")
 	}
@@ -38,6 +40,9 @@ func (v IP) Sanitize() (IP, error) {
 func (v IP) V4() (IPv4, bool) {
 	if v == "" {
 		return "0.0.0.0", true
+	}
+	if strings.Contains(string(v), ":") {
+		return "", false
 	}
 	if strings.Contains(string(v), ".") {
 		return IPv4(v), true
@@ -97,6 +102,14 @@ func (v IP) IsPrivate() bool {
 	return false
 }
 
+// IPPort represents an IP and port pair.
+// IPv6 address is enclosed in square brackets to be distinguishable from the port separator.
+//
+// Examples:
+//
+//	:80 - unspecified IP address
+//	127.0.0.1:80
+//	[::1]:80
 type IPPort string
 
 func (v IPPort) Sanitize() (IPPort, error) {
@@ -126,16 +139,34 @@ func (v IPPort) Sanitize() (IPPort, error) {
 		return "", errors.New("port number must be between 0 and 65535")
 	}
 
-	return IPPort(string(ip) + ":" + strconv.Itoa(n)), nil
+	h := string(ip)
+	if strings.Contains(h, ":") {
+		h = "[" + h + "]"
+	}
+	return IPPort(h + ":" + strconv.Itoa(n)), nil
+}
+
+func (v IPPort) split() (ip, port string) {
+	s := string(v)
+	i := strings.LastIndex(s, ":")
+	if j := strings.Index(s, "]"); i < 0 || (j >= 0 && i < j) {
+		return s, ""
+	}
+
+	return s[:i], s[i+1:]
 }
 
 func (v IPPort) Split() (IP, int) {
-	s := string(v)
-	i := strings.LastIndex(s, ":")
+	ip, p := v.split()
+	if len(ip) >= 2 && ip[0] == '[' && ip[len(ip)-1] == ']' {
+		ip = ip[1 : len(ip)-1]
+	}
+	if p == "" {
+		return IP(ip), -1
+	}
 
-	n, _ := strconv.Atoi(s[i+1:])
-
-	return IP(s[:i]), n
+	n, _ := strconv.Atoi(p)
+	return IP(ip), n
 }
 
 func (v IPPort) IP() IP {
@@ -146,6 +177,41 @@ func (v IPPort) IP() IP {
 func (v IPPort) Port() int {
 	_, port := v.Split()
 	return port
+}
+
+func (v IPPort) WithIP(ip string) (IPPort, error) {
+	w, err := IP(ip).Sanitize()
+	if err != nil {
+		return "", err
+	}
+
+	h := string(w)
+	if strings.Contains(h, ":") {
+		h = "[" + h + "]"
+	}
+
+	_, p := v.split()
+	if p == "" {
+		return IPPort(h), nil
+	}
+	return IPPort(h + ":" + p), nil
+}
+
+func (v IPPort) WithIPX(ip string) IPPort {
+	return must(v.WithIP(ip))
+}
+
+func (v IPPort) WithPort(port int) (IPPort, error) {
+	if !(0 <= port && port <= 65535) {
+		return "", errors.New("port number must be between 0 and 65535")
+	}
+
+	ip, _ := v.split()
+	return IPPort(ip + ":" + strconv.Itoa(port)), nil
+}
+
+func (v IPPort) WithPortX(port int) IPPort {
+	return must(v.WithPort(port))
 }
 
 type IPwithCIDR string
@@ -208,8 +274,22 @@ func (v IPwithCIDR) IP() IP {
 	return ip
 }
 
+// Size returns the network size, i.e. the number after the '/'.
+func (v IPwithCIDR) Size() int {
+	_, n := v.Split()
+	return n
+}
+
 func (v IPwithCIDR) Bytes() []byte {
 	return v.IP().Bytes()
+}
+
+func (v IPwithCIDR) IsUnspecified() bool {
+	return v.IP().IsUnspecified()
+}
+
+func (v IPwithCIDR) IsLoopback() bool {
+	return v.IP().IsLoopback()
 }
 
 func (v IPwithCIDR) IsPrivate() bool {
@@ -249,7 +329,7 @@ func (v IPv4) Bytes() [4]byte {
 
 	var b [4]byte
 	es := strings.SplitN(s, ".", 5)
-	l := max(len(es), 4)
+	l := min(len(es), 4)
 	for i := 0; i < l; i++ {
 		n, _ := strconv.Atoi(es[i])
 		b[i] = byte(n)
@@ -305,6 +385,15 @@ func (v IPv6) Sanitize() (IPv6, error) {
 		return "", fmt.Errorf("must have at least 2 colons")
 	}
 
+	// A dotted-quad tail such as "::ffff:192.0.2.128" occupies the last two blocks.
+	dotted := ""
+	if e := es[len(es)-1]; strings.Contains(e, ".") {
+		if _, err := IPv4(e).Sanitize(); err != nil {
+			return "", fmt.Errorf("invalid IPv4-mapped IPv6 address: %w", err)
+		}
+		dotted = e
+	}
+
 	b := [8]uint16{}
 
 	i := 0 // nth block currently being processed.
@@ -312,6 +401,20 @@ func (v IPv6) Sanitize() (IPv6, error) {
 	c := 0 // current run of zero blocks.
 	l := 0 // longest run of zero blocks.
 	t := 0 // tail index of longest run of zero blocks.
+	has_ellipsis := false
+	put := func(n uint16) {
+		if n == 0 {
+			c++
+		} else {
+			if c > l {
+				l = c
+				t = i
+			}
+			c = 0
+			b[i] = n
+		}
+		i++
+	}
 	for ; j < len(es); j++ {
 		e := es[j]
 		if e == "" {
@@ -321,6 +424,7 @@ func (v IPv6) Sanitize() (IPv6, error) {
 					return "", fmt.Errorf("single ':' at the end is not allowed")
 				}
 
+				has_ellipsis = true
 				c++
 				break
 			}
@@ -329,6 +433,9 @@ func (v IPv6) Sanitize() (IPv6, error) {
 			}
 
 			k := 9 - len(es) // length of current omitted zero blocks
+			if dotted != "" {
+				k--
+			}
 			if j == 0 {
 				// "::" at the beginning
 				if es[1] != "" {
@@ -337,19 +444,23 @@ func (v IPv6) Sanitize() (IPv6, error) {
 				j++ // skip the next empty block
 				k++ // already counted one empty block
 			}
+			has_ellipsis = true
 			i += k
 			c += k
 			continue
 		}
-		if (b[5] == 0xffff && l == 5) || // "0:0:0:0:0:ffff:IPv4"
-			// In the case of there is omitted zero blocks like: "::ffff:IPv4"
-			(b[6] == 0xffff && l == 6) {
-			// IPv4-mapped IPv6 address
-			if _, err := IPv4(e).Sanitize(); err != nil {
-				return "", fmt.Errorf("invalid IPv4-mapped IPv6 address: %w", err)
+		if strings.Contains(e, ".") {
+			if j != len(es)-1 {
+				return "", fmt.Errorf("[%d]: IPv4-mapped address must be at the end", j)
+			}
+			if i > 6 {
+				return "", fmt.Errorf("must have at most 8 blocks")
 			}
 
-			return IPv6("::ffff:" + e), nil
+			b4 := IPv4(e).Bytes()
+			put(uint16(b4[0])<<8 | uint16(b4[1]))
+			put(uint16(b4[2])<<8 | uint16(b4[3]))
+			continue
 		}
 		if len(e) > 4 {
 			return "", fmt.Errorf("[%d]: block too long", j)
@@ -359,18 +470,10 @@ func (v IPv6) Sanitize() (IPv6, error) {
 		if err != nil {
 			return "", fmt.Errorf("[%d]: not a valid hex number", j)
 		}
-		if n == 0 {
-			c++
-		} else {
-			if c > l {
-				l = c
-				t = i
-				c = 0
-			}
-			b[i] = uint16(n)
-		}
-
-		i++
+		put(uint16(n))
+	}
+	if !has_ellipsis && i != 8 {
+		return "", fmt.Errorf("must have 8 blocks")
 	}
 	if c > l {
 		l = c
@@ -380,6 +483,11 @@ func (v IPv6) Sanitize() (IPv6, error) {
 		// do not shorten
 		l = 0
 		t = 8
+	}
+
+	if dotted != "" && b[5] == 0xffff && b[0]|b[1]|b[2]|b[3]|b[4] == 0 {
+		// IPv4-mapped IPv6 address; keep the mixed notation.
+		return IPv6("::ffff:" + dotted), nil
 	}
 
 	bs := make([]byte, 0, len("hhhh:hhhh:hhhh:hhhh:hhhh:hhhh:hhhh:hhhh:"))
@@ -400,10 +508,10 @@ func (v IPv6) Sanitize() (IPv6, error) {
 		s := fmt.Sprintf("%x:", b[i])
 		bs = append(bs, s...)
 	}
-	if b[7] == 0 {
-		bs = append(bs, 'x')
+	if l > 0 && h+l == 8 {
+		// The shortened run reaches the last block so the value ends with "::".
+		return IPv6(bs), nil
 	}
-
 	return IPv6(bs[:len(bs)-1]), nil
 }
 
@@ -414,6 +522,7 @@ func (v IPv6) Bytes() [16]byte {
 
 	b := [16]byte{}
 	l := min(len(es), 8)
+	dotted := l > 0 && strings.Contains(es[l-1], ".")
 	j := 0 // byte index being processed.
 	for i := range l {
 		e := es[i]
@@ -423,16 +532,16 @@ func (v IPv6) Bytes() [16]byte {
 				continue
 			}
 			k := 9 - len(es)
+			if dotted {
+				// A dotted-quad tail occupies two blocks.
+				k--
+			}
 			j += (k * 2)
 			continue
 		}
-		if i == l-1 && strings.Contains(e, ".") {
-			// IPv4-mapped IPv6 address
-			ipv4 := IPv4(e)
-			b4 := ipv4.Bytes()
-			b[10] = 0xff
-			b[11] = 0xff
-			copy(b[12:], b4[:])
+		if i == l-1 && dotted {
+			b4 := IPv4(e).Bytes()
+			copy(b[j:], b4[:])
 			break
 		}
 
@@ -452,7 +561,7 @@ func (v IPv6) IsLoopback() bool {
 func (v IPv6) IsPrivate() bool {
 	b := v.Bytes()
 	switch {
-	case b[0]|0b11111110 == 0xfc:
+	case b[0]&0b11111110 == 0xfc:
 		// fc00::/7
 		return true
 	default:
@@ -499,6 +608,12 @@ func (x ipBaseLocal) Sanitize(v string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if a.Userinfo() != "" {
+		return "", errors.New("invalid local address: userinfo not allowed")
+	}
+	if a.Port() < 0 {
+		return "", errors.New("invalid local address: missing port")
+	}
 
 	h := a.Host()
 	switch {
@@ -522,8 +637,7 @@ func (x ipBaseLocal) Sanitize(v string) (string, error) {
 		}
 		net = net6
 	default:
-		// unreachable?
-		return "", errors.New("invalid local address: host is not an IP address")
+		// Hostname; keep the network as is.
 	}
 	return net + ":" + string(h) + ":" + strconv.Itoa(a.Port()), nil
 }

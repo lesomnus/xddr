@@ -64,31 +64,8 @@ func (v Host) Domain() (Domain, bool) {
 }
 
 func (v Host) IsIPv4() bool {
-	if v == "" {
-		return false
-	}
-
-	es := strings.SplitN(string(v), ".", 5)
-	if len(es) != 4 {
-		return false
-	}
-	for _, e := range es {
-		if e == "" {
-			return false
-		}
-		if len(e) > 1 && e[0] == '0' {
-			return false
-		}
-
-		n, err := strconv.Atoi(e)
-		if err != nil {
-			return false
-		}
-		if n < 0 || n > 255 {
-			return false
-		}
-	}
-	return true
+	_, err := IPv4(v).Sanitize()
+	return err == nil
 }
 
 func (v Host) IsIPv6() bool {
@@ -137,16 +114,65 @@ func (v HostPort) Sanitize() (HostPort, error) {
 		return "", errors.New("port number out of range")
 	}
 
-	return HostPort(string(h) + ":" + p), nil
+	return HostPort(string(h) + ":" + strconv.Itoa(n)), nil
 }
 
-func (v HostPort) Split() (Host, int, error) {
+func (v HostPort) split() (host, port string) {
 	s := string(v)
 	i := strings.LastIndex(s, ":")
+	if j := strings.Index(s, "]"); i < 0 || (j >= 0 && i < j) {
+		return s, ""
+	}
 
-	h := Host(s[:i])
-	p := s[i+1:]
+	return s[:i], s[i+1:]
+}
+
+func (v HostPort) Split() (Host, int) {
+	h, p := v.split()
+	if p == "" {
+		return Host(h), -1
+	}
 
 	n, _ := strconv.Atoi(p)
-	return h, n, nil
+	return Host(h), n
+}
+
+func (v HostPort) Host() Host {
+	h, _ := v.Split()
+	return h
+}
+
+func (v HostPort) Port() int {
+	_, p := v.Split()
+	return p
+}
+
+func (v HostPort) WithHost(host string) (HostPort, error) {
+	w, err := Host(host).Sanitize()
+	if err != nil {
+		return "", err
+	}
+
+	_, p := v.split()
+	if p == "" {
+		return HostPort(w), nil
+	}
+	return HostPort(string(w) + ":" + p), nil
+}
+
+func (v HostPort) WithHostX(host string) HostPort {
+	return must(v.WithHost(host))
+}
+
+func (v HostPort) WithPort(port int) (HostPort, error) {
+	if !(0 <= port && port <= 65535) {
+		return "", errors.New("port number out of range")
+	}
+
+	h, _ := v.split()
+	return HostPort(h + ":" + strconv.Itoa(port)), nil
+}
+
+func (v HostPort) WithPortX(port int) HostPort {
+	return must(v.WithPort(port))
 }

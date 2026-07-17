@@ -7,6 +7,20 @@ import (
 	"github.com/lesomnus/xddr"
 )
 
+func TestWithX(t *testing.T) {
+	// WithX-suffixed variants return the value directly on success...
+	AssertEq(t, xddr.Authority("host").WithPortX(80), xddr.Authority("host:80"))
+	AssertEq(t, xddr.URL("scheme://host").WithPortX(80), xddr.URL("scheme://host:80"))
+
+	// ...and panic on error.
+	defer func() {
+		if recover() == nil {
+			t.Fatal("want panic, but returned")
+		}
+	}()
+	xddr.Authority("host").WithPortX(70000)
+}
+
 func TestReliable(t *testing.T) {
 	t.Run("WithHost", func(t *testing.T) {
 		for _, tc := range [][]string{

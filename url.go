@@ -26,6 +26,33 @@ import (
 //	        userinfo     host   port
 type URL string
 
+func (URL) _urlLike() {}
+
+// sanitizeScheme validates and normalizes a URL scheme to lowercase.
+func sanitizeScheme(s string) (string, error) {
+	if s == "" {
+		return "", errors.New("missing scheme")
+	}
+
+	var r strings.Builder
+	r.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		b := s[i]
+		if c, ok := lowerAlpha(b); ok {
+			r.WriteByte(c)
+			continue
+		}
+		if i > 0 && (isDigit(b) || b == '+' || b == '-' || b == '.') {
+			r.WriteByte(b)
+			continue
+		}
+
+		return "", errPosF(i, "invalid character %q in scheme", b)
+	}
+
+	return r.String(), nil
+}
+
 func (v URL) Sanitize() (URL, error) {
 	s := string(v)
 	pos := 0
@@ -49,20 +76,10 @@ func (v URL) Sanitize() (URL, error) {
 	// §3.1. Scheme
 	if scheme, ok := read_until_any(":"); !ok {
 		return "", errors.New("missing scheme separator ':'")
+	} else if w, err := sanitizeScheme(scheme); err != nil {
+		return "", err
 	} else {
-		for i, b := range []byte(scheme) {
-			c, ok := lowerAlpha(b)
-			if ok {
-				r.WriteByte(c)
-				continue
-			}
-			if i > 0 && (isDigit(b) || b == '+' || b == '-' || b == '.') {
-				r.WriteByte(b)
-				continue
-			}
-
-			return "", errPosF(i, "invalid character %q in scheme", b)
-		}
+		r.WriteString(w)
 	}
 
 	if _, ok := strings.CutPrefix(s[1:], "//"); ok {
@@ -126,25 +143,28 @@ func (v URL) Sanitize() (URL, error) {
 
 	// §3.4. Query
 	if s[0] == '?' {
-		r.WriteByte('?')
 		s = s[1:]
 		last++
 
+		// An empty query is dropped.
 		v, _ := read_until_any("#")
-		for i := 0; i < len(v); i++ {
-			n, err := sanitizeCharTo(&r, v[i:], func(c byte) bool {
-				return isUrlPchar(c) || c == '/' || c == '?'
-			})
-			if err != nil {
-				return "", accPosErr(err, last+i)
-			}
-			if n == 0 {
-				return "", errPosF(last+i, "invalid character %q in query", v[i])
-			}
+		if v != "" {
+			r.WriteByte('?')
+			for i := 0; i < len(v); i++ {
+				n, err := sanitizeCharTo(&r, v[i:], func(c byte) bool {
+					return isUrlPchar(c) || c == '/' || c == '?'
+				})
+				if err != nil {
+					return "", accPosErr(err, last+i)
+				}
+				if n == 0 {
+					return "", errPosF(last+i, "invalid character %q in query", v[i])
+				}
 
-			i += n - 1
+				i += n - 1
+			}
+			last += len(v)
 		}
-		last += len(v)
 	}
 	if s == "" {
 		return URL(r.String()), nil
@@ -152,25 +172,28 @@ func (v URL) Sanitize() (URL, error) {
 
 	// §3.5. Fragment
 	if s[0] == '#' {
-		r.WriteByte('#')
 		s = s[1:]
 		last++
 
+		// An empty fragment is dropped.
 		v, _ := read_until_any("#")
-		for i := 0; i < len(v); i++ {
-			n, err := sanitizeCharTo(&r, v[i:], func(b byte) bool {
-				return isUrlPchar(b) || b == '/' || b == '?'
-			})
-			if err != nil {
-				return "", accPosErr(err, last+i)
-			}
-			if n == 0 {
-				return "", errPosF(last+i, "invalid character %q in fragment", v[i])
-			}
+		if v != "" {
+			r.WriteByte('#')
+			for i := 0; i < len(v); i++ {
+				n, err := sanitizeCharTo(&r, v[i:], func(b byte) bool {
+					return isUrlPchar(b) || b == '/' || b == '?'
+				})
+				if err != nil {
+					return "", accPosErr(err, last+i)
+				}
+				if n == 0 {
+					return "", errPosF(last+i, "invalid character %q in fragment", v[i])
+				}
 
-			i += n - 1
+				i += n - 1
+			}
+			last += len(v)
 		}
-		last += len(v)
 	}
 
 	return URL(r.String()), nil
@@ -223,6 +246,18 @@ func (v URL) Scheme() string {
 func (v URL) Authority() Authority {
 	_, _, w, _, _, _ := v.split()
 	return Authority(w)
+}
+
+func (v URL) Userinfo() string {
+	return v.Authority().Userinfo()
+}
+
+func (v URL) Username() string {
+	return v.Authority().Username()
+}
+
+func (v URL) Password() string {
+	return v.Authority().Password()
 }
 
 func (v URL) Host() Host {
@@ -341,17 +376,24 @@ func (v URL) build(s string, h bool, a Authority, p, q, f string) URL {
 }
 
 func (v URL) WithScheme(scheme string) (URL, error) {
-	// TODO: validate scheme
+	w, err := sanitizeScheme(scheme)
+	if err != nil {
+		return "", err
+	}
 
 	s := string(v)
 	i := strings.Index(s, ":")
 	if i < 0 {
-		return URL(scheme + ":"), nil
+		return URL(w + ":" + s), nil
 	}
-	if s[:i] == scheme {
+	if s[:i] == w {
 		return v, nil
 	}
-	return URL(scheme + s[i:]), nil
+	return URL(w + s[i:]), nil
+}
+
+func (v URL) WithSchemeX(scheme string) URL {
+	return must(v.WithScheme(scheme))
 }
 
 func (v URL) WithAuthority(authority string) (URL, error) {
@@ -364,6 +406,10 @@ func (v URL) WithAuthority(authority string) (URL, error) {
 	return v.build(s, h, w, p, q, f), nil
 }
 
+func (v URL) WithAuthorityX(authority string) URL {
+	return must(v.WithAuthority(authority))
+}
+
 func (v URL) WithUserinfo(userinfo string) (URL, error) {
 	s, h, a, p, q, f := v.split()
 	a, err := a.WithUserinfo(userinfo)
@@ -374,6 +420,10 @@ func (v URL) WithUserinfo(userinfo string) (URL, error) {
 	return v.build(s, h, a, p, q, f), nil
 }
 
+func (v URL) WithUserinfoX(userinfo string) URL {
+	return must(v.WithUserinfo(userinfo))
+}
+
 func (v URL) WithHost(host string) (URL, error) {
 	s, h, a, p, q, f := v.split()
 	a, err := a.WithHost(host)
@@ -382,6 +432,10 @@ func (v URL) WithHost(host string) (URL, error) {
 	}
 
 	return v.build(s, h, a, p, q, f), nil
+}
+
+func (v URL) WithHostX(host string) URL {
+	return must(v.WithHost(host))
 }
 
 func (v URL) WithPort(port int) (URL, error) {
@@ -459,6 +513,14 @@ func percent_decode(s string) (b byte, rest string, err error) {
 	return
 }
 
+// URLLike is a constraint for string types that are syntactically a [URL].
+//
+// Note that the helpers below interpret the value using the plain URL grammar;
+// scheme-specific semantics are not applied.
+// For example, [PortOf] returns the port written in the authority (-1 if absent)
+// and does not resolve scheme default ports like [HTTP.Port] does,
+// and [GRPC] keeps its target endpoint in the path, which [HostOf] does not look at.
+// Prefer the concrete type's own methods when they exist.
 type URLLike interface {
 	~string
 	_urlLike()
@@ -468,8 +530,18 @@ func SchemeOf[T URLLike](v T) string {
 	return URL(v).Scheme()
 }
 
+func AuthorityOf[T URLLike](v T) Authority {
+	return URL(v).Authority()
+}
+
 func HostOf[T URLLike](v T) Host {
 	return URL(v).Host()
+}
+
+// PortOf returns the port written in the authority component, or -1 if absent.
+// It does not resolve scheme default ports; use the concrete type's Port method for that.
+func PortOf[T URLLike](v T) int {
+	return URL(v).Port()
 }
 
 func WithHost[T URLLike](v T, host string) (T, error) {
@@ -478,4 +550,8 @@ func WithHost[T URLLike](v T, host string) (T, error) {
 		return v, err
 	}
 	return T(u), nil
+}
+
+func WithHostX[T URLLike](v T, host string) T {
+	return must(WithHost(v, host))
 }

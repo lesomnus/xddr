@@ -180,4 +180,27 @@ func TestFilepath(t *testing.T) {
 			})
 		}
 	})
+	t.Run("WithPath", func(t *testing.T) {
+		v, err := xddr.Filepath("file:/a?q#f").WithPath("/b")
+		AssertNoError(t, err)
+		AssertEq(t, v, xddr.Filepath("file:/b?q#f"))
+	})
+	t.Run("WithQuery", func(t *testing.T) {
+		v, err := xddr.Filepath("file:/a?q#f").WithQuery("x=1")
+		AssertNoError(t, err)
+		AssertEq(t, v, xddr.Filepath("file:/a?x=1#f"))
+
+		v, err = xddr.Filepath("file:/a?q#f").WithQuery("")
+		AssertNoError(t, err)
+		AssertEq(t, v, xddr.Filepath("file:/a#f"))
+	})
+	t.Run("WithFragment", func(t *testing.T) {
+		v, err := xddr.Filepath("file:/a?q#f").WithFragment("z")
+		AssertNoError(t, err)
+		AssertEq(t, v, xddr.Filepath("file:/a?q#z"))
+
+		v, err = xddr.Filepath("file:/a?q#f").WithFragment("")
+		AssertNoError(t, err)
+		AssertEq(t, v, xddr.Filepath("file:/a?q"))
+	})
 }

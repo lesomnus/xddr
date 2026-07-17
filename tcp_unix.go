@@ -2,8 +2,10 @@ package xddr
 
 import "errors"
 
-// TCPLocal or UnixLocal
+// TCPUnixLocal is a [TCPLocal] or a [UnixLocal].
 type TCPUnixLocal string
+
+func (TCPUnixLocal) _localLike() {}
 
 func (v TCPUnixLocal) Sanitize() (TCPUnixLocal, error) {
 	s := string(v)
@@ -24,7 +26,7 @@ func (v TCPUnixLocal) Sanitize() (TCPUnixLocal, error) {
 		if err != nil {
 			return "", err
 		}
-		return TCPUnixLocal("unix:" + w), nil
+		return TCPUnixLocal(w), nil
 	}
 
 	net, _ := Local(v).Split()
@@ -36,7 +38,7 @@ func (v TCPUnixLocal) Sanitize() (TCPUnixLocal, error) {
 		}
 		return TCPUnixLocal(w), nil
 
-	case "unix":
+	case "unix", "unixgram", "unixpacket":
 		w, err := UnixLocal(v).Sanitize()
 		if err != nil {
 			return "", err
@@ -86,7 +88,15 @@ func (v TCPUnixLocal) WithHost(host string) (TCPUnixLocal, error) {
 	return TCPUnixLocal(net + string(a)), nil
 }
 
+func (v TCPUnixLocal) WithHostX(host string) TCPUnixLocal {
+	return must(v.WithHost(host))
+}
+
 func (v TCPUnixLocal) WithPort(port int) (TCPUnixLocal, error) {
+	if port < 0 {
+		return "", errors.New("port number out of range")
+	}
+
 	net, addr := Local(v).Split()
 	switch net {
 	case "tcp", "tcp4", "tcp6":
@@ -100,4 +110,8 @@ func (v TCPUnixLocal) WithPort(port int) (TCPUnixLocal, error) {
 	}
 
 	return TCPUnixLocal(net + ":" + string(a)), nil
+}
+
+func (v TCPUnixLocal) WithPortX(port int) TCPUnixLocal {
+	return must(v.WithPort(port))
 }

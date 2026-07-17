@@ -417,6 +417,11 @@ func TestURL(t *testing.T) {
 				"scheme:///ABC%2FDEF",
 				"scheme", "", "/ABC%2FDEF", "", "",
 			},
+			{ // Encoded sub-delims are not decoded since it changes the structure.
+				"scheme:///%21?a%3Db%26c=d",
+				"scheme:///%21?a%3Db%26c=d",
+				"scheme", "", "/%21", "a%3Db%26c=d", "",
+			},
 
 			// IP
 			{
@@ -425,11 +430,11 @@ func TestURL(t *testing.T) {
 				"scheme", "127.0.0.1", "", "", ""},
 			{
 				"scheme://127.0.0.1/?#",
-				"scheme://127.0.0.1/?#",
+				"scheme://127.0.0.1/",
 				"scheme", "127.0.0.1", "/", "", ""},
 			{
 				"scheme://127.0.0.1:80/?#",
-				"scheme://127.0.0.1:80/?#",
+				"scheme://127.0.0.1:80/",
 				"scheme", "127.0.0.1:80", "/", "", ""},
 			{
 				"scheme://[::1]",
@@ -437,11 +442,11 @@ func TestURL(t *testing.T) {
 				"scheme", "[::1]", "", "", ""},
 			{
 				"scheme://[::1]/?#",
-				"scheme://[::1]/?#",
+				"scheme://[::1]/",
 				"scheme", "[::1]", "/", "", ""},
 			{
 				"scheme://[::1]:80/?#",
-				"scheme://[::1]:80/?#",
+				"scheme://[::1]:80/",
 				"scheme", "[::1]:80", "/", "", ""},
 
 			// Filepath-like.
@@ -475,6 +480,7 @@ func TestURL(t *testing.T) {
 			t.Run(string(tc.given), func(t *testing.T) {
 				v, err := tc.given.Sanitize()
 				AssertNoError(t, err)
+				AssertEq(t, v, tc.normalized)
 				AssertEq(t, v.Scheme(), tc.scheme)
 				AssertEq(t, v.Authority(), tc.authority)
 				AssertEq(t, v.Path(), tc.path)
@@ -489,6 +495,8 @@ func TestURL(t *testing.T) {
 				"example.com",
 				"http//example.com",
 				"answer42",
+				":",
+				"://example.com",
 			},
 			{"invalid character", // in scheme
 				"ht^tp:",
@@ -621,6 +629,13 @@ func TestURL(t *testing.T) {
 			{"http://", "https", "https://"},
 			{"http:host/path?query#fragment", "https", "https:host/path?query#fragment"},
 			{"http://host/path?query#fragment", "https", "https://host/path?query#fragment"},
+
+			// Scheme is normalized to lowercase.
+			{"http://host", "HTTPS", "https://host"},
+
+			// Value without a scheme.
+			{"", "http", "http:"},
+			{"example.com", "http", "http:example.com"},
 		} {
 			t.Run(fmt.Sprintf("URL(%q).WithScheme(%q)=%q", tc.given, tc.value, tc.want), func(t *testing.T) {
 				value, err := tc.given.WithScheme(tc.value)
@@ -628,6 +643,12 @@ func TestURL(t *testing.T) {
 				AssertEq(t, value, tc.want)
 			})
 		}
+
+		_, err := xddr.URL("http://host").WithScheme("42")
+		AssertErrorContains(t, err, "invalid character")
+
+		_, err = xddr.URL("http://host").WithScheme("")
+		AssertErrorContains(t, err, "missing scheme")
 	})
 	t.Run("WithAuthority", func(t *testing.T) {
 		for _, tc := range []struct {
@@ -684,6 +705,33 @@ func TestURL(t *testing.T) {
 }
 
 func TestURLLike(t *testing.T) {
+	t.Run("SchemeOf", func(t *testing.T) {
+		AssertEq(t, xddr.SchemeOf(xddr.URL("scheme://example.com")), "scheme")
+		AssertEq(t, xddr.SchemeOf(xddr.HTTP("https://example.com")), "https")
+		AssertEq(t, xddr.SchemeOf(xddr.GRPC("dns:///grpc.io:50051")), "dns")
+		AssertEq(t, xddr.SchemeOf(xddr.ICE("stun:example.com")), "stun")
+	})
+	t.Run("HostOf", func(t *testing.T) {
+		AssertEq(t, xddr.HostOf(xddr.URL("scheme://a.b:8080/p")), xddr.Host("a.b"))
+		AssertEq(t, xddr.HostOf(xddr.HTTP("http://a.b:8080/p")), xddr.Host("a.b"))
+		AssertEq(t, xddr.HostOf(xddr.ICE("stun:example.com")), xddr.Host("example.com"))
+
+		// Note that generic helpers interpret the value using the plain URL
+		// grammar: a GRPC target like "dns:///host:port" keeps its endpoint
+		// in the path, so its URL authority (thus its host) is empty.
+		// Use [xddr.GRPC.Host] instead.
+		AssertEq(t, xddr.HostOf(xddr.GRPC("dns:///grpc.io:50051")), xddr.Host(""))
+	})
+	t.Run("AuthorityOf", func(t *testing.T) {
+		AssertEq(t, xddr.AuthorityOf(xddr.HTTP("http://u:p@h:1/x")), xddr.Authority("u:p@h:1"))
+	})
+	t.Run("PortOf", func(t *testing.T) {
+		AssertEq(t, xddr.PortOf(xddr.HTTP("http://h:8080")), 8080)
+
+		// PortOf returns the port as written; it does not resolve
+		// scheme default ports like [xddr.HTTP.Port] does.
+		AssertEq(t, xddr.PortOf(xddr.HTTP("http://h")), -1)
+	})
 	t.Run("WithHost", func(t *testing.T) {
 		v := xddr.HTTP("http://example.com/path")
 		w, err := xddr.WithHost(v, "example.org")
@@ -694,5 +742,11 @@ func TestURLLike(t *testing.T) {
 		if w != expected {
 			t.Fatalf("WithHost = %v, want %v", w, expected)
 		}
+
+		u, err := xddr.WithHost(xddr.URL("scheme://a/p"), "b")
+		AssertNoError(t, err)
+		AssertEq(t, u, xddr.URL("scheme://b/p"))
+
+		AssertEq(t, xddr.WithHostX(xddr.ICE("stun:example.com"), "example.org"), xddr.ICE("stun:example.org"))
 	})
 }

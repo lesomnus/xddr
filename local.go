@@ -1,6 +1,7 @@
 package xddr
 
 import (
+	"errors"
 	"net"
 	"strings"
 )
@@ -20,6 +21,25 @@ import (
 //	udp:[::]:53
 //	unix:/var/run/socket.sock
 type Local string
+
+func (Local) _localLike() {}
+
+// Sanitize validates and normalizes the local address based on its network.
+// Unlike more specific types such as [TCPLocal], it does not infer a network
+// from the address; the network must be given explicitly.
+func (v Local) Sanitize() (Local, error) {
+	net, _ := v.Split()
+	switch net {
+	case "tcp", "tcp4", "tcp6":
+		return transWithErr[Local](TCPLocal(v).Sanitize())
+	case "udp", "udp4", "udp6":
+		return transWithErr[Local](UDPLocal(v).Sanitize())
+	case "unix", "unixgram", "unixpacket":
+		return transWithErr[Local](UnixLocal(v).Sanitize())
+	}
+
+	return "", errors.New("unknown network: " + net)
+}
 
 func (v Local) Split() (network, address string) {
 	network, address, _ = strings.Cut(string(v), ":")
@@ -77,12 +97,41 @@ func ListenPacket[T LocalLike](v T) (net.PacketConn, error) {
 	return net.ListenPacket(n, a)
 }
 
+// UnixLocal represents a local address of a Unix domain socket.
+//
+// Syntax:
+//
+//	[<network>:]<path>
+//
+// Examples:
+//
+//	/var/run/socket.sock
+//	./relative.sock
+//	unix:/var/run/socket.sock
+//	unixgram:/var/run/socket.sock
 type UnixLocal string
 
+func (UnixLocal) _localLike() {}
+
 func (v UnixLocal) Sanitize() (UnixLocal, error) {
-	net, addr := Local(v).Split()
-	if net == "" {
-		net = "unix"
+	s := string(v)
+	if s == "" {
+		return "", errors.New("empty local address")
+	}
+
+	net, addr, ok := strings.Cut(s, ":")
+	switch {
+	case !ok:
+		// No ':' at all; the whole value is the path.
+		net, addr = "unix", s
+	case net == "unix", net == "unixgram", net == "unixpacket":
+		// ok
+	default:
+		// ':' is a part of the path.
+		net, addr = "unix", s
+	}
+	if addr == "" {
+		return "", errors.New("empty socket path")
 	}
 
 	// Validate filepath?

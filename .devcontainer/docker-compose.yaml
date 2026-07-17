@@ -3,20 +3,32 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-
     command: sleep infinity
-
+    
+    user: "1000"
     privileged: true
-
-    cpus: 2.0
-    mem_limit: 2g
+    environment:
+      - SHELL=/bin/zsh
 
     volumes:
+      - command.history:/commandhistory
+      - go.cache.mod:/home/hypnos/go/pkg/mod
+      - go.cache.bin:/home/hypnos/.cache/go-build
+
       - ..:/workspace
       - ${HOME}/workspaces:/workspaces
-      - mod.cache.go.dev:/go/pkg/mod
-      - bin.cache.go.dev:/home/hypnos/.cache/go-build
-
+      
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 8G
+          pids: 2048
+        reservations:
+          cpus: "2"
+          memory: 4G
+  
 volumes:
-  mod.cache.go.dev:
-  bin.cache.go.dev:
+  command.history:
+  go.cache.mod:
+  go.cache.bin:

@@ -77,10 +77,21 @@ func TestAuthority(t *testing.T) {
 				"user:pass@host:80",
 				"user:pass", "host", 80,
 			},
+			{
+				"host:0",
+				"host:0",
+				"", "host", 0,
+			},
+			{
+				"host:0080",
+				"host:80",
+				"", "host", 80,
+			},
 		} {
 			t.Run(string(tc.given), func(t *testing.T) {
 				v, err := tc.given.Sanitize()
 				AssertNoError(t, err)
+				AssertEq(t, v, tc.normalized)
 				AssertEq(t, v.Userinfo(), tc.userinfo)
 				AssertEq(t, v.Host(), tc.host)
 				AssertEq(t, v.Port(), tc.port)
@@ -114,6 +125,10 @@ func TestAuthority(t *testing.T) {
 			{"invalid character", // in port
 				"example.com:8a",
 				"example.com:0x42",
+			},
+			{"port number out of range",
+				"example.com:70000",
+				"example.com:99999999999999999999",
 			},
 		} {
 			for _, given := range tc[1:] {
@@ -185,6 +200,9 @@ func TestAuthority(t *testing.T) {
 		}{
 			{"user:pass@host", 80, "user:pass@host:80"},
 			{"user:pass@host:80", 443, "user:pass@host:443"},
+
+			// Negative port removes the port.
+			{"user:pass@host:80", -1, "user:pass@host"},
 		} {
 			t.Run(fmt.Sprintf("Authority(%q).WithPort(%d)=%q", tc.given, tc.value, tc.want), func(t *testing.T) {
 				value, err := tc.given.WithPort(tc.value)
@@ -192,5 +210,8 @@ func TestAuthority(t *testing.T) {
 				AssertEq(t, value, tc.want)
 			})
 		}
+
+		_, err := xddr.Authority("host").WithPort(70000)
+		AssertErrorContains(t, err, "port number out of range")
 	})
 }

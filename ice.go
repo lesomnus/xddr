@@ -15,6 +15,8 @@ import (
 //	turns:example.com:443?transport=tcp
 type ICE string
 
+func (ICE) _urlLike() {}
+
 func (v ICE) Sanitize() (ICE, error) {
 	u, err := URL(v).Sanitize()
 	if err != nil {
@@ -52,8 +54,7 @@ func (v ICE) Sanitize() (ICE, error) {
 		return "", err
 	}
 
-	u.build(s, false, a, "", q, "")
-	return ICE(u), nil
+	return ICE(u.build(s, false, a, "", q, "")), nil
 }
 
 func (v ICE) mapPort(scheme string, port int) int {
@@ -71,6 +72,20 @@ func (v ICE) mapPort(scheme string, port int) int {
 	return port
 }
 
+func (v ICE) Scheme() string {
+	return URL(v).Scheme()
+}
+
+func (v ICE) Authority() Authority {
+	return URL(v).Authority()
+}
+
+func (v ICE) Host() Host {
+	return URL(v).Host()
+}
+
+// Port returns the port of the URI.
+// If the port is not present, default port of the scheme is returned.
 func (v ICE) Port() int {
 	port := URL(v).Authority().Port()
 	if port > 0 {
@@ -89,6 +104,24 @@ func (v ICE) Port() int {
 	return -1
 }
 
+// Transport returns the value of the "transport" query parameter, or "" if absent.
+func (v ICE) Transport() string {
+	for k, w := range URL(v).QueryParams() {
+		if k == "transport" {
+			return w
+		}
+	}
+	return ""
+}
+
+func (v ICE) WithHost(host string) (ICE, error) {
+	return transWithErr[ICE](URL(v).WithHost(host))
+}
+
+func (v ICE) WithHostX(host string) ICE {
+	return must(v.WithHost(host))
+}
+
 func (v ICE) WithPort(port int) (ICE, error) {
 	s := URL(v).Scheme()
 	port = v.mapPort(s, port)
@@ -100,6 +133,10 @@ func (v ICE) WithPort(port int) (ICE, error) {
 	return ICE(u), nil
 }
 
+func (v ICE) WithPortX(port int) ICE {
+	return must(v.WithPort(port))
+}
+
 type ICELocal string
 
 func (ICELocal) _localLike() {}
@@ -108,12 +145,30 @@ func (v ICELocal) Sanitize() (ICELocal, error) {
 	return transWithErr[ICELocal](TCPUDPLocal(v).Sanitize())
 }
 
+func (v ICELocal) WithHost(host string) (ICELocal, error) {
+	return transWithErr[ICELocal](TCPUDPLocal(v).WithHost(host))
+}
+
+func (v ICELocal) WithHostX(host string) ICELocal {
+	return must(v.WithHost(host))
+}
+
+func (v ICELocal) WithPort(port int) (ICELocal, error) {
+	return transWithErr[ICELocal](TCPUDPLocal(v).WithPort(port))
+}
+
+func (v ICELocal) WithPortX(port int) ICELocal {
+	return must(v.WithPort(port))
+}
+
 func (v ICELocal) Network() string {
 	return Local(v).Network()
 }
 
-func (v ICELocal) Address() IPPort {
-	return IPPort(Local(v).Address())
+// Address returns the address part as an [Authority] since the host may be
+// an IP address, a hostname, or empty (all interfaces).
+func (v ICELocal) Address() Authority {
+	return Authority(Local(v).Address())
 }
 
 func (v ICELocal) IsStream() bool {
